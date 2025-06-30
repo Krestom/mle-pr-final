@@ -164,3 +164,7 @@ cython_debug/
 old/
 .vscode/
 .DS_Store
+
+
+
+.final_env
