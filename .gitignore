@@ -172,3 +172,5 @@ old/
 *.csv
 *.npy
 *.parquet
+*.pkl
+*.npz
