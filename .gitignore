@@ -174,3 +174,8 @@ old/
 *.parquet
 *.pkl
 *.npz
+mlruns/
+mlflow_experiments_store/
+data/
+models/
+*.sqlite
