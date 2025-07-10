@@ -1,0 +1,9 @@
+**
+
+!app/
+!*.py
+!data/recommendations.parquet
+!data/similar_items.parquet
+!data/item_popularity.parquet
+!requirements.txt
+!Dockerfile
