@@ -179,3 +179,5 @@ mlflow_experiments_store/
 data/
 models/
 *.sqlite
+*.db
+logs/
