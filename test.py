@@ -38,7 +38,7 @@ def run_full_test():
     
     # 2. Тест предрассчитанных рекомендаций
     print("\nTesting precomputed recommendations:")
-    for user_id in [64, 1407479, 123123123123]:  # Последний - несуществующий
+    for user_id in [64, 1407479, 123123123123]:
         payload = {"user_id": user_id, "k": 5}
         result = test_endpoint("/recommendations", "POST", payload)
         if result:
@@ -46,14 +46,14 @@ def run_full_test():
     
     # 3. Тест онлайн-рекомендаций
     print("\nTesting online recommendations:")
-    for user_id in [64, 1407479, 123123123123]:  # Последний - несуществующий
+    for user_id in [64, 1407479, 123123123123]:
         result = test_endpoint(f"/online_recommendations?user_id={user_id}&k=3")
         if result:
             print(f"  User {user_id}: {result['recs']}")
     
     # 4. Тест похожих товаров
     print("\nTesting similar items:")
-    for item_id in [421640, 44122, 123123123123]:  # Последний - несуществующий
+    for item_id in [421640, 44122, 123123123123]:
         payload = {"item_id": item_id, "k": 3}
         result = test_endpoint("/similar_items", "POST", payload)
         if result:

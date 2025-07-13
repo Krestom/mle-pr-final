@@ -1,0 +1,89 @@
+version: '3.8'
+services:
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  airflow-init:
+    image: apache/airflow:2.7.1
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__LOGGING__COLORED_CONSOLE_LOG: 'false'
+    command: >
+      bash -c "
+        airflow db migrate &&
+        airflow db upgrade &&
+        airflow users create --username airflow --firstname Airflow --lastname Admin --role Admin --email admin@example.com --password airflow &&
+        sleep 5
+      "
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./scripts:/opt/airflow/scripts
+
+  airflow-webserver:
+    image: apache/airflow:2.7.1
+    restart: unless-stopped
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./scripts:/opt/airflow/scripts
+      - /home/mle-user/mle-pr-final/data:/opt/airflow/data
+      - /home/mle-user/mle-pr-final/models:/opt/airflow/models
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
+      AIRFLOW__LOGGING__COLORED_CONSOLE_LOG: 'false'
+    ports:
+      - "8080:8080"
+    command: >
+      bash -c "
+        airflow db check &&
+        airflow webserver --port 8080
+      "
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/home"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+
+  airflow-scheduler:
+    image: apache/airflow:2.7.1
+    restart: unless-stopped
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./scripts:/opt/airflow/scripts
+      - /home/mle-user/mle-pr-final/data:/opt/airflow/data
+      - /home/mle-user/mle-pr-final/models:/opt/airflow/models
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    command: >
+      bash -c "
+        airflow db check &&
+        airflow scheduler
+      "
+
+volumes:
+  postgres-data:

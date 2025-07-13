@@ -10,18 +10,15 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from scipy.sparse import load_npz
 
-# ─────────── Prometheus ────────────
 from prometheus_client import Counter
 from prometheus_fastapi_instrumentator import Instrumentator
 
-# ─────────── Логирование ────────────
 logger = logging.getLogger("uvicorn.error")
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 
-# ─────────── Счётчики доменной логики ────────────
 PERSONAL_RECS_COUNTER = Counter(
     "personal_recommendations_total", "Personal recommendation responses"
 )
@@ -32,7 +29,6 @@ SESSION_RECS_COUNTER = Counter(
     "session_recommendations_total", "Session-based recommendation responses"
 )
 
-# ─────────── Классы бизнес-логики ────────────
 class Recommendations:
     def __init__(self):
         self._recs = {"personal": None, "default": None}
@@ -43,7 +39,6 @@ class Recommendations:
         }
 
     def load(self, rec_type: str, path: str, **kwargs):
-        logger.info(f"Loading recommendations, type: {rec_type}")
         self._recs[rec_type] = pd.read_parquet(path, **kwargs)
 
         if rec_type == "personal":
@@ -52,7 +47,7 @@ class Recommendations:
             self._recs[rec_type] = self._recs[rec_type].sort_values(
                 "weights", ascending=False
             )
-        logger.info(f"Loaded {rec_type} recommendations")
+        logger.info(f"Загружены {rec_type} рекоммендации")
 
     def get(self, user_id: int, k: int = 10) -> List[int]:
         try:
@@ -66,7 +61,7 @@ class Recommendations:
             recs = recs[:k]
             self._stats["request_personal_count"] += 1
             PERSONAL_RECS_COUNTER.inc()
-            logger.info(f"Personal recommendations for user {user_id}")
+            logger.info(f"Персональные рекомендации для пользователя {user_id}")
             return recs
         except KeyError:
             recs = (
@@ -74,10 +69,10 @@ class Recommendations:
             )
             self._stats["request_default_count"] += 1
             DEFAULT_RECS_COUNTER.inc()
-            logger.info(f"Default recommendations for unknown user {user_id}")
+            logger.info(f"Дефолтные рекомендации для пользователя {user_id}")
             return recs
         except Exception as e:
-            logger.error(f"Recommendation error: {str(e)}")
+            logger.error(f"Ошибка рекоммендаций: {str(e)}")
             return []
 
     def get_popular(self, k: int = 10) -> List[int]:
@@ -86,7 +81,7 @@ class Recommendations:
         )
 
     def stats(self):
-        logger.info("Recommendation statistics:")
+        logger.info("Статистика:")
         for name, value in self._stats.items():
             logger.info(f"{name:<30} {value}")
 
@@ -98,7 +93,7 @@ class SimilarItems:
     def load(self, path: str, **kwargs):
         self._similar_items = pd.read_parquet(path, **kwargs)
         self._similar_items = self._similar_items.set_index("item_idx_1")
-        logger.info("Similar items loaded")
+        logger.info("Похожие загружены")
 
     def get(self, item_id: int, k: int = 10) -> Dict[str, List]:
         try:
@@ -109,10 +104,10 @@ class SimilarItems:
                 "scores": i2i["score"].astype(float).tolist(),
             }
         except KeyError:
-            logger.warning(f"No similar items found for item {item_id}")
+            logger.warning(f"Нет похожих для item {item_id}")
             return {"similar_items": [], "scores": []}
         except Exception as e:
-            logger.error(f"Similar items error: {str(e)}")
+            logger.error(f"Ошибка в похожих: {str(e)}")
             return {"similar_items": [], "scores": []}
 
     def get_batch(self, item_ids: List[int], k_per_item: int = 3
@@ -124,7 +119,7 @@ class SimilarItems:
                 similar = self.get(item_id_int, k_per_item)
                 results[item_id] = similar["similar_items"]
             except Exception as e:
-                logger.warning(f"Error processing item {item_id}: {str(e)}")
+                logger.warning(f"Ошибка айтема {item_id}: {str(e)}")
                 results[item_id] = []
         return results
 
@@ -135,20 +130,20 @@ class EventStore:
         self.max_events_per_user = max_events_per_user
         self.max_total_events = max_total_events
         self.total_events = 0
-        logger.info("Event store initialized")
+        logger.info("Хранилище событий готово")
 
     def put(self, user_id: int, item_id: int):
         try:
             user_id = int(user_id)
             item_id = int(item_id)
         except Exception as e:
-            logger.error(f"Invalid ID format: {str(e)}")
+            logger.error(f"Неправильный формат: {str(e)}")
             return
 
         if self.total_events >= self.max_total_events:
             self.events.clear()
             self.total_events = 0
-            logger.warning("Event store cleared due to capacity limit")
+            logger.warning("Хранилище очищено по достижении лимита")
 
         if user_id not in self.events:
             self.events[user_id] = []
@@ -183,7 +178,7 @@ class EventStore:
         return self.events[user_id][:k]
 
 
-# ─────────── pydantic модели ───────────
+# без этого нифига не работало, спасибо ChatGPT
 class RecommendationRequest(BaseModel):
     user_id: int
     k: int = 10
@@ -211,7 +206,6 @@ class SessionRecommendationRequest(BaseModel):
     similar_per_item: int = 3
 
 
-# ─────────── Глобальные объекты ───────────
 rec_store = Recommendations()
 sim_items_store = SimilarItems()
 events_store = EventStore()
@@ -224,7 +218,7 @@ reverse_item_map = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Starting service initialization")
+    logger.info("Начинаем вечеринку")
 
     try:
         required_files = {
@@ -239,7 +233,7 @@ async def lifespan(app: FastAPI):
 
         for path in required_files.values():
             if not os.path.exists(path):
-                raise FileNotFoundError(f"Required file not found: {path}")
+                raise FileNotFoundError(f"Нет обязательного файла: {path}")
 
         rec_store.load(
             "personal",
@@ -272,25 +266,25 @@ async def lifespan(app: FastAPI):
             i: int(item_id) for i, item_id in enumerate(item_encoder.classes_)
         }
 
-        logger.info("Service initialization completed successfully")
+        logger.info("Сервис успешно запущен")
     except Exception as e:
-        logger.critical(f"Initialization failed: {str(e)}")
-        raise RuntimeError(f"Service initialization failed: {str(e)}")
+        logger.critical(f"Сервис лежит: {str(e)}")
+        raise RuntimeError(f"Не получилось загрузить: {str(e)}")
 
     yield
 
-    logger.info("Shutting down service")
+    logger.info("Вырубаем")
     rec_store.stats()
-    logger.info(f"Total events recorded: {events_store.total_events}")
-    logger.info(f"Unique users with events: {len(events_store.events)}")
+    logger.info(f"Всего событий записано: {events_store.total_events}")
+    logger.info(f"Уникальные юзеы с событиями: {len(events_store.events)}")
 
 
 app = FastAPI(title="Unified Recommendation Service", lifespan=lifespan)
 
-# ─────────── Авто-инструментация Prometheus ───────────
-Instrumentator().instrument(app).expose(app)  # /metrics готов!
+# Прометеус
+Instrumentator().instrument(app).expose(app)
 
-# ─────────── Роуты ───────────
+# Навигация
 @app.get("/")
 def root():
     return {
@@ -302,7 +296,7 @@ def root():
             "/session_recommendations",
             "/events/put",
             "/events/get",
-            "/metrics",  # сгенерирован Instrumentator
+            "/metrics",
         ],
     }
 
@@ -328,7 +322,7 @@ async def online_recommendations(user_id: int, k: int = 10):
         recommend_ids = [int(reverse_item_map[item_id]) for item_id in item_ids]
         return {"recs": recommend_ids}
     except Exception as e:
-        logger.error(f"ALS recommendation error: {str(e)}")
+        logger.error(f"ALS ошибка: {str(e)}")
         return {"recs": rec_store.get(user_id=user_id, k=k)}
 
 
